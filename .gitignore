@@ -1,0 +1,66 @@
+# Kastoma Django E-commerce API - .gitignore
+# Project-specific files to ignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Django
+*.log
+db.sqlite3
+db.sqlite3-journal
+local_settings.py
+
+# Static files (generated)
+/staticfiles/
+/media/
+
+# Environment variables
+.env
+.env.prod
+.env.dev
+.env.staging
+.env.local
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+coverage.xml
+
+# Build
+build/
+dist/
+*.egg-info/
+
+# Logs
+/logs/
+
+# Docker overrides
+docker-compose.override.yml
+
+# Local development
+local_config.py
+*.bak
+migrations/
+
+# Development tools and setup files
+development-tools/
+/docs/
