@@ -89,3 +89,14 @@ uvloop==0.21.0
 virtualenv==20.34.0
 watchfiles==1.1.0
 websockets==15.0.1
+
+# Development and CI/CD Dependencies
+ruff==0.6.9
+black==24.8.0
+isort==5.13.2
+pytest==8.3.3
+pytest-django==4.9.0
+coverage==7.6.1
+safety==3.2.7
+bandit==1.7.10
+pre-commit==3.8.0
