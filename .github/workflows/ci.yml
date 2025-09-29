@@ -1,0 +1,263 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  PYTHON_VERSION: '3.13'
+  NODE_VERSION: '18'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root_password
+          MYSQL_DATABASE: kastoma_test
+          MYSQL_USER: kastoma_user
+          MYSQL_PASSWORD: kastoma_password
+        ports:
+          - 3306:3306
+        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libmysqlclient-dev pkg-config
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Set up environment variables
+      run: |
+        echo "SECRET_KEY=test-secret-key-for-ci-cd-pipeline" >> $GITHUB_ENV
+        echo "DEBUG=True" >> $GITHUB_ENV
+        echo "DATABASE_URL=mysql://kastoma_user:kastoma_password@localhost:3306/kastoma_test" >> $GITHUB_ENV
+        echo "DJANGO_SETTINGS_MODULE=kastoma_backend.settings.dev" >> $GITHUB_ENV
+
+    - name: Wait for MySQL
+      run: |
+        while ! mysqladmin ping -h localhost -u root -proot_password --silent; do
+          echo 'Waiting for MySQL...'
+          sleep 2
+        done
+        echo 'MySQL is ready!'
+
+    - name: Run database migrations
+      run: |
+        python manage.py migrate --settings=kastoma_backend.settings.dev
+
+    - name: Run linting with ruff
+      run: |
+        ruff check . --output-format=github || echo "⚠️ Ruff linting issues found"
+      continue-on-error: true
+
+    - name: Check code formatting with black
+      run: |
+        black --check --diff . || echo "⚠️ Code formatting issues found"
+      continue-on-error: true
+
+    - name: Check import sorting with isort
+      run: |
+        isort --check-only --diff . || echo "⚠️ Import sorting issues found"
+      continue-on-error: true
+
+    - name: Run Django tests
+      run: |
+        python manage.py test --settings=kastoma_backend.settings.dev --verbosity=2
+      env:
+        SECRET_KEY: test-secret-key-for-ci-cd-pipeline
+        DEBUG: True
+        DATABASE_URL: mysql://kastoma_user:kastoma_password@localhost:3306/kastoma_test
+
+    - name: Run pytest
+      run: |
+        pytest --tb=short --disable-warnings
+      env:
+        SECRET_KEY: test-secret-key-for-ci-cd-pipeline
+        DEBUG: True
+        DATABASE_URL: mysql://kastoma_user:kastoma_password@localhost:3306/kastoma_test
+
+    - name: Generate coverage report
+      run: |
+        pip install coverage
+        coverage run --source='.' manage.py test --settings=kastoma_backend.settings.dev
+        coverage xml
+      continue-on-error: true
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: kastoma-api-coverage
+      continue-on-error: true
+
+  security:
+    runs-on: ubuntu-latest
+    needs: test
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install safety bandit
+
+    - name: Run safety check for vulnerabilities
+      run: |
+        safety check --json --output safety-report.json
+      continue-on-error: true
+
+    - name: Run bandit security linter
+      run: |
+        bandit -r . -x tests/ -f json -o bandit-report.json
+      continue-on-error: true
+
+    - name: Upload security reports
+      uses: actions/upload-artifact@v3
+      with:
+        name: security-reports
+        path: |
+          safety-report.json
+          bandit-report.json
+      if: always()
+
+  build:
+    runs-on: ubuntu-latest
+    needs: [test, security]
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+      if: github.event_name != 'pull_request'
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: kastoma/api
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        platforms: linux/amd64,linux/arm64
+        push: ${{ github.event_name != 'pull_request' }}
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Run container security scan
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: kastoma/api:latest
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+      if: github.event_name != 'pull_request'
+      continue-on-error: true
+
+    - name: Upload Trivy scan results
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: 'trivy-results.sarif'
+      if: github.event_name != 'pull_request'
+      continue-on-error: true
+
+  deploy-staging:
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/develop'
+    environment: staging
+    
+    steps:
+    - name: Deploy to staging
+      run: |
+        echo "Deploying to staging environment..."
+        # Add your staging deployment logic here
+        # This could include:
+        # - SSH into staging server
+        # - Pull latest Docker image
+        # - Update docker-compose.yml
+        # - Run database migrations
+        # - Restart services
+
+  deploy-production:
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    
+    steps:
+    - name: Deploy to production
+      run: |
+        echo "Deploying to production environment..."
+        # Add your production deployment logic here
+        # This could include:
+        # - SSH into production server
+        # - Pull latest Docker image
+        # - Update docker-compose.yml
+        # - Run database migrations with --check first
+        # - Blue-green deployment
+        # - Health checks
+        # - Rollback on failure
+
+  notify:
+    runs-on: ubuntu-latest
+    needs: [test, security, build]
+    if: always()
+    
+    steps:
+    - name: Notify on success
+      if: ${{ needs.test.result == 'success' && needs.security.result == 'success' && needs.build.result == 'success' }}
+      run: |
+        echo "✅ CI/CD Pipeline completed successfully!"
+        # Add notification logic (Slack, email, etc.)
+
+    - name: Notify on failure
+      if: ${{ needs.test.result == 'failure' || needs.security.result == 'failure' || needs.build.result == 'failure' }}
+      run: |
+        echo "❌ CI/CD Pipeline failed!"
+        # Add notification logic (Slack, email, etc.)
