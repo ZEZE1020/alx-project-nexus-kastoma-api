@@ -208,9 +208,9 @@ class ProductListSerializer(serializers.ModelSerializer):
     @extend_schema_field(serializers.DictField())
     def get_primary_image(self, obj):
         """Get the primary image for the product."""
-        primary_image = obj.images.filter(is_primary=True).first()
+        primary_image = next((img for img in obj.images if img.get('is_primary', False)), None)
         if primary_image:
-            return ProductImageSerializer(primary_image, context=self.context).data
+            return primary_image
         return None
     
     @extend_schema_field(serializers.FloatField(allow_null=True))
@@ -238,13 +238,10 @@ class ProductDetailSerializer(ProductSerializer):
     
     def get_related_products(self, obj):
         """Get related products from the same category."""
-        related = Product.objects.filter(
-            category=obj.category,
-            is_active=True
-        ).exclude(id=obj.id)[:4]
-        
-        return ProductListSerializer(
-            related, 
-            many=True, 
-            context=self.context
-        ).data
+        related = [
+            product for product in Product.objects.filter(
+                category=obj.category,
+                is_active=True
+            ).exclude(id=obj.id)[:4]
+        ]
+        return ProductListSerializer(related, many=True, context=self.context).data

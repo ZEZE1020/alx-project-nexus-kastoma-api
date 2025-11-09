@@ -6,6 +6,7 @@ variants, images, and inventory tracking.
 """
 
 import uuid
+import os
 from django.db import models
 from django.contrib.auth import get_user_model
 from django.core.validators import MinValueValidator, MaxValueValidator
@@ -49,7 +50,7 @@ class Category(TimeStampedModel):
     meta_title = models.CharField(max_length=255, blank=True, null=True)
     meta_description = models.TextField(blank=True, null=True)
     
-    class Meta:
+    class Meta(TimeStampedModel.Meta):
         verbose_name = 'Category'
         verbose_name_plural = 'Categories'
         ordering = ['sort_order', 'name']
@@ -84,7 +85,7 @@ class Category(TimeStampedModel):
         """Get the depth level of this category in the hierarchy."""
         if self.is_root:
             return 0
-        return self.parent.level + 1
+        return self.parent.level + 1 if self.parent else 0
     
     def get_ancestors(self):
         """Get all ancestor categories up to the root."""
@@ -98,16 +99,16 @@ class Category(TimeStampedModel):
     def get_descendants(self):
         """Get all descendant categories recursively."""
         descendants = []
-        for child in self.children.filter(is_active=True):
+        for child in self.children.all():
             descendants.append(child)
             descendants.extend(child.get_descendants())
         return descendants
     
     def get_products_count(self, include_children=True):
         """Get count of products in this category and optionally children."""
-        count = self.products.filter(is_active=True).count()
+        count = self.products.count()
         if include_children:
-            for child in self.children.filter(is_active=True):
+            for child in self.children.all():
                 count += child.get_products_count(include_children=True)
         return count
 
@@ -241,7 +242,7 @@ class Product(TimeStampedModel):
         help_text="Comma-separated tags for search and filtering"
     )
     
-    class Meta:
+    class Meta(TimeStampedModel.Meta):
         verbose_name = 'Product'
         verbose_name_plural = 'Products'
         ordering = ['-created_at']
@@ -290,8 +291,12 @@ class Product(TimeStampedModel):
     def discount_percentage(self):
         """Calculate discount percentage if compare_price is set."""
         if self.compare_price and self.compare_price > self.price:
-            return int(((self.compare_price - self.price) / self.compare_price) * 100)
-        return 0
+            try:
+                percent = (float(self.compare_price) - float(self.price)) / float(self.compare_price) * 100
+                return round(percent, 2)
+            except (TypeError, ZeroDivisionError):
+                return 0.0
+        return 0.0
     
     @property
     def primary_image(self):
@@ -323,6 +328,17 @@ class Product(TimeStampedModel):
         if tag in tags_list:
             tags_list.remove(tag)
             self.tags = ', '.join(tags_list)
+    
+    @property
+    def profit_margin(self):
+        """Calculate profit margin as a percentage."""
+        if self.cost_price and self.price:
+            try:
+                margin = (self.price - self.cost_price) / self.cost_price * 100
+                return round(margin, 2)
+            except ZeroDivisionError:
+                return 0.0
+        return 0.0
 
 
 class ProductImage(TimeStampedModel):
@@ -352,7 +368,8 @@ class ProductImage(TimeStampedModel):
         ]
     
     def __str__(self):
-        return f"{self.product.name} - Image {self.sort_order}"
+        image_name = os.path.basename(self.image.name) if self.image else ''
+        return f"{self.product.name} - {image_name or 'No Image'}"
     
     def save(self, *args, **kwargs):
         """Ensure only one primary image per product."""
@@ -414,7 +431,7 @@ class ProductVariant(TimeStampedModel):
         ]
     
     def __str__(self):
-        return f"{self.product.name} - {self.name}"
+        return f"{self.product.name} - {self.name or self.sku or str(self.pk)}"
     
     @property
     def effective_price(self):
@@ -471,6 +488,16 @@ class StockMovement(TimeStampedModel):
         null=True,
         related_name='stock_movements'
     )
+    quantity = models.PositiveIntegerField(
+        default=0,
+        help_text="Quantity of stock movement"
+    )
+    reference = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text="Reference for the stock movement"
+    )
     
     class Meta:
         verbose_name = 'Stock Movement'
@@ -519,7 +546,9 @@ class ProductReview(TimeStampedModel):
         verbose_name = 'Product Review'
         verbose_name_plural = 'Product Reviews'
         ordering = ['-created_at']
-        unique_together = ['user', 'product', 'order']
+        constraints = [
+            models.UniqueConstraint(fields=['user', 'product'], name='unique_review_per_user_product')
+        ]
         indexes = [
             models.Index(fields=['product']),
             models.Index(fields=['user']),
