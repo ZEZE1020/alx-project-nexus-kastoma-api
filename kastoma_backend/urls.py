@@ -53,7 +53,7 @@ urlpatterns = [
     # JWT Authentication (handled by v1 API urls)
     
     # API Version 1
-    path('api/', include('kastoma_backend.api.urls')),
+    path('api/v1/', include(('kastoma_backend.api.urls', 'api'), namespace='v1')),
 ]
 
 # Serve static and media files in development

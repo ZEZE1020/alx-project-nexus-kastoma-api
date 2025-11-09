@@ -28,7 +28,8 @@ router.register(r'products', ProductViewSet, basename='product')
 router.register(r'categories', CategoryViewSet, basename='category')
 router.register(r'users', UserViewSet, basename='user')
 
-app_name = 'v1'
+# Register the 'products' namespace explicitly
+app_name = 'products'
 
 urlpatterns = [
     # Include all router URLs
