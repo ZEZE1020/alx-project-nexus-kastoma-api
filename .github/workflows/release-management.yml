@@ -47,7 +47,12 @@ jobs:
         elif [[ "${{ github.ref_type }}" == "tag" ]]; then
           VERSION="${{ github.ref_name }}"
         else
-          VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.5.0")
+        fi
+        
+        # Ensure version starts with 'v' prefix
+        if [[ ! "$VERSION" =~ ^v ]]; then
+          VERSION="v${VERSION}"
         fi
         
         echo "version=$VERSION" >> $GITHUB_OUTPUT

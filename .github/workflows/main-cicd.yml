@@ -27,11 +27,11 @@ jobs:
         ports:
           - 3306:3306
         options: >-
-          --health-cmd="mysqladmin ping -h localhost -u root -proot_password"
-          --health-interval=5s
-          --health-timeout=3s
-          --health-retries=10
-          --health-start-period=30s
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -u root -proot_password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=20
+          --health-start-period=90s
           --tmpfs /var/lib/mysql:rw,noexec,nosuid,size=1024m
 
     steps:
@@ -63,37 +63,60 @@ jobs:
 
     - name: Wait for MySQL
       run: |
-        timeout=60  # 60 seconds timeout
+        timeout=180  # Increased to 180 seconds timeout to handle slow startups
         elapsed=0
-        interval=2
-        
+        interval=3
+
         echo "Waiting for MySQL to be ready (timeout: ${timeout}s)..."
-        
+
         while [ $elapsed -lt $timeout ]; do
-          if mysqladmin ping -h localhost -u root -proot_password --silent; then
+          if mysqladmin ping -h 127.0.0.1 -u root -proot_password --silent; then
             echo "MySQL is ready! (took ${elapsed}s)"
-            exit 0
+            break
           fi
-          
+
           echo "MySQL not ready yet... (${elapsed}s/${timeout}s)"
           sleep $interval
           elapsed=$((elapsed + interval))
         done
-        
-        echo "ERROR: MySQL failed to start within ${timeout} seconds"
-        echo "Checking MySQL service status:"
-        docker ps --filter "name=mysql" || true
-        echo "Checking MySQL logs:"
-        docker logs $(docker ps -q --filter "ancestor=mysql:8.0") 2>/dev/null | tail -20 || echo "No MySQL container logs found"
-        exit 1
+
+        if [ $elapsed -ge $timeout ]; then
+          echo "ERROR: MySQL failed to start within ${timeout} seconds"
+          echo "Checking MySQL service status:"
+          docker ps --filter "name=mysql" || true
+          echo "Checking MySQL logs:"
+          # show last 50 lines for better diagnostics
+          docker logs $(docker ps -q --filter "ancestor=mysql:8.0") 2>/dev/null | tail -50 || echo "No MySQL container logs found"
+          exit 1
+        fi
+
+        echo "Final verification - testing both root and user connections..."
+
+        # Test root connection
+        if ! mysql -h 127.0.0.1 -u root -proot_password -e "SELECT 1;" > /dev/null 2>&1; then
+          echo "ERROR: Root connection test failed"
+          exit 1
+        fi
+
+        # Test user connection to specific database
+        if ! mysql -h 127.0.0.1 -u kastoma_user -pkastoma_password -e "SELECT 1;" kastoma_test > /dev/null 2>&1; then
+          echo "ERROR: User connection test failed"
+          # Show grants for debugging
+          mysql -h 127.0.0.1 -u root -proot_password -e "SHOW GRANTS FOR 'kastoma_user'@'%';" || true
+          exit 1
+        fi
+
+        echo "All MySQL connection tests passed!"
 
     - name: Verify MySQL database setup
       run: |
         echo "Verifying MySQL connection and database setup..."
-        mysql -h localhost -u kastoma_user -pkastoma_password -e "SELECT 1;" kastoma_test || {
+        mysql -h 127.0.0.1 -u kastoma_user -pkastoma_password -e "SELECT 1;" kastoma_test || {
           echo "ERROR: Cannot connect to MySQL database 'kastoma_test' with user 'kastoma_user'"
           echo "Attempting to show databases with root user:"
-          mysql -h localhost -u root -proot_password -e "SHOW DATABASES;" || echo "Root connection also failed"
+          mysql -h 127.0.0.1 -u root -proot_password -e "SHOW DATABASES;" || echo "Root connection also failed"
+          echo "Checking user permissions:"
+          mysql -h 127.0.0.1 -u root -proot_password -e "SELECT user, host FROM mysql.user WHERE user='kastoma_user';" || true
           exit 1
         }
         echo "Database connection verified successfully!"
