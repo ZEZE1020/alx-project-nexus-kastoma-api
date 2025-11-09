@@ -64,3 +64,17 @@ migrations/
 # Development tools and setup files
 development-tools/
 /docs/
+# Generated files and documentation
+API_REFERENCE_FRONTEND.md
+FRONTEND_DEVELOPMENT_PROMPT.md
+GITHUB_SECRETS_GUIDE.md
+TOKEN_GENERATION_GUIDE.md
+api_tokens.json
+generate_tokens.py
+test_api.py
+users/TESTING_STRATEGY.md
+
+# Test files
+core/tests.py
+orders/tests.py
+products/tests.py
