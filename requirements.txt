@@ -10,7 +10,7 @@ cfgv==3.4.0
 charset-normalizer==3.4.3
 click==8.3.0
 distlib==0.4.0
-django==4.2.24
+django==4.2.26
 django-cors-headers==4.9.0
 django-debug-toolbar==6.0.0
 django-extensions==4.1
