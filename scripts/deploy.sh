@@ -5,7 +5,7 @@
 
 set -e  # Exit on error
 
-echo "🚀 Starting Kastoma API deployment..."
+echo "Starting Kastoma API deployment..."
 
 # Colors for output
 RED='\033[0;31m'
@@ -46,7 +46,7 @@ for var in "${required_vars[@]}"; do
     fi
 done
 
-print_info "Environment variables validated ✓"
+print_info "Environment variables validated"
 
 # Install/update dependencies
 print_info "Installing Python dependencies..."
@@ -62,7 +62,7 @@ if python manage.py showmigrations --list | grep -q '[ ]'; then
     print_warning "Pending migrations detected. Running migrations..."
     python manage.py migrate
 else
-    print_info "No pending migrations ✓"
+    print_info "No pending migrations"
 fi
 
 # Collect static files
@@ -78,7 +78,7 @@ if not User.objects.filter(is_superuser=True).exists():
     print('No superuser found. Please create one:')
     exit(1)
 else:
-    print('Superuser exists ✓')
+    print('Superuser exists')
 " || {
     print_warning "No superuser found. Creating one..."
     python manage.py createsuperuser
@@ -104,7 +104,7 @@ from django.test import Client
 client = Client()
 response = client.get('/health/')
 if response.status_code == 200:
-    print('Health check passed ✓')
+    print('Health check passed')
 else:
     print(f'Health check failed with status {response.status_code}')
     exit(1)
@@ -127,10 +127,10 @@ if command -v systemctl > /dev/null 2>&1; then
     fi
 fi
 
-print_info "✅ Deployment completed successfully!"
-print_info "🌐 Your API should be available at your configured domain"
-print_info "📊 Check the health endpoint: /health/"
-print_info "📚 API documentation: /api/docs/"
+print_info "Deployment completed successfully!"
+print_info "Your API should be available at your configured domain"
+print_info "Check the health endpoint: /health/"
+print_info "API documentation: /api/docs/"
 
 echo ""
 echo "Next steps:"

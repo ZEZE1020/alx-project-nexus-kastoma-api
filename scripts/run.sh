@@ -23,7 +23,7 @@ source venv/bin/activate
 if [ -f ".env" ]; then
     export $(grep -v '^#' .env | xargs)
 else
-    echo "⚠️  .env file not found. Using default settings."
+    echo "Warning: .env file not found. Using default settings."
 fi
 
 # Set default Django settings module
@@ -36,10 +36,10 @@ run_django_command() {
 
 # Function to run the development server
 run_server() {
-    echo "🚀 Starting Kastoma Backend development server..."
-    echo "📍 Settings: $DJANGO_SETTINGS_MODULE"
-    echo "📍 Server will be available at: http://localhost:8000"
-    echo "📍 API docs will be available at: http://localhost:8000/api/docs/"
+    echo "Starting Kastoma Backend development server..."
+    echo "Settings: $DJANGO_SETTINGS_MODULE"
+    echo "Server will be available at: http://localhost:8000"
+    echo "API docs will be available at: http://localhost:8000/api/docs/"
     echo ""
     python manage.py runserver 0.0.0.0:8000
 }
@@ -52,7 +52,7 @@ run_tests() {
 
 # Function to run linting
 run_lint() {
-    echo "🔍 Running code quality checks..."
+    echo "Running code quality checks..."
     echo "Running ruff..."
     ruff check .
     echo "Running black..."
@@ -63,7 +63,7 @@ run_lint() {
 
 # Function to format code
 run_format() {
-    echo "🎨 Formatting code..."
+    echo "Formatting code..."
     black .
     isort .
     ruff check --fix .
@@ -71,7 +71,7 @@ run_format() {
 
 # Function to seed database with sample data
 run_seed() {
-    echo "🌱 Seeding database with sample data..."
+    echo "Seeding database with sample data..."
     run_django_command seed_products
 }
 
