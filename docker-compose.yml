@@ -75,7 +75,7 @@ services:
         gunicorn --bind 0.0.0.0:8000 --reload kastoma_backend.wsgi:application
       "
 
-  # Nginx (optional, for production-like setup)
+  # Nginx 
   nginx:
     image: nginx:alpine
     container_name: kastoma_nginx
