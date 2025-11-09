@@ -99,7 +99,7 @@ show_help() {
     echo "Examples:"
     echo "  ./scripts/run.sh runserver"
     echo "  ./scripts/run.sh migrate"
-    echo "  ./scripts/run.sh test products.tests"
+    echo "  ./scripts/run.sh test products.test_suite"
     echo "  ./scripts/run.sh createsuperuser"
 }
 

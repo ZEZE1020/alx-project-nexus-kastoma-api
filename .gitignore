@@ -75,6 +75,6 @@ test_api.py
 users/TESTING_STRATEGY.md
 
 # Test files
-core/tests.py
-orders/tests.py
+core/test_suite.py
+orders/test_suite.py
 products/tests.py
