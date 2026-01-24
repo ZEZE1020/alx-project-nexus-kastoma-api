@@ -2,6 +2,7 @@
 Core API views for testing.
 """
 from rest_framework import viewsets, status, filters, permissions
+import logging
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
@@ -132,8 +133,9 @@ class EmailTemplateViewSet(BaseModelViewSet):
             }
             return Response(rendered_data)
         except Exception as e:
+            logging.exception("Error rendering email template (id=%s): %s", pk, e)
             return Response(
-                {'error': f'Template rendering failed: {str(e)}'}, 
+                {'error': 'Template rendering failed due to an internal error.'}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
 
